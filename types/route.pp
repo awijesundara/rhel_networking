@@ -8,7 +8,7 @@ type Network::Route = Struct[{
   Optional[mtu]         => Integer[68],
   Optional['type']        => Enum['unicast', 'local', 'blackhole', 'unreachable', 'prohibit', 'throw'],
   # Extra attributes passed verbatim (keyfile: routeN_options k=v; ifcfg: "k v")
-  Optional[options]     => Hash[Network::OptionKey, Variant[Integer, Boolean, Pattern[/\A[^\s'"\\`$]+\z/]]],
+  Optional[options]     => Hash[Network::OptionKey, Variant[Integer, Boolean, Pattern[/\A[A-Za-z0-9_.:\/-]+\z/]]],
   # Free text; written as a comment next to the entry in the generated files.
   Optional[description] => Network::Description,
 }]

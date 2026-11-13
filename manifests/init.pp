@@ -64,11 +64,11 @@ class network (
     'ifcfg-lo', 'ifup*', 'ifdown*', 'init.ipv6-global', 'network-functions*', 'readme-ifcfg-rh.txt',
   ],
   Boolean                                $remove_foreign_files = false,
-  Hash[String[1], Hash[String[1], Any]]  $nm_settings          = {},
-  Hash[String[1], Hash[String[1], Hash]] $nm_conf_files        = {},
-  Hash[String[1], Integer[1, 4294967295]] $route_tables        = {},
-  Hash[String[1], Scalar]                $sysctl               = {},
-  Hash[String[1], Scalar]                $sysconfig_network    = {},
+  Hash[Pattern[/\A[A-Za-z0-9_.-]+\z/], Hash[Pattern[/\A[A-Za-z0-9_.-]+\z/], Any]] $nm_settings = {},
+  Hash[Pattern[/\A[A-Za-z0-9][A-Za-z0-9_.-]*\.conf\z/], Hash[Pattern[/\A[A-Za-z0-9_.-]+\z/], Hash[Pattern[/\A[A-Za-z0-9_.-]+\z/], Any]]] $nm_conf_files = {},
+  Hash[Pattern[/\A[A-Za-z_][\w.-]*\z/], Integer[1, 4294967295]] $route_tables = {},
+  Hash[Pattern[/\A[A-Za-z0-9_.\/*-]+\z/], Variant[Integer, Pattern[/\A[^\r\n]*\z/]]] $sysctl = {},
+  Hash[Pattern[/\A[A-Za-z_][A-Za-z0-9_]*\z/], Scalar] $sysconfig_network = {},
   Hash[String[1], Hash]                  $interfaces           = {},
   Hash[Variant[Integer[1, 4294967295], Pattern[/\A[1-9]\d*\z/]], Pattern[/\A[A-Za-z_][\w.-]*\z/]] $routing_tables = {},
   Hash[String[1], Hash]                  $connections          = {},
@@ -76,7 +76,8 @@ class network (
   Hash[String[1], Hash]                  $bridges              = {},
 ) {
   $family = $facts['os']['family']
-  $major  = Integer($facts['os']['release']['major'].split('\.')[0])
+  # Non-numeric releases (Debian testing reports e.g. 'trixie/sid') count as 0.
+  $major  = $facts['os']['release']['major'] ? { /\A(\d+)/ => Integer($1), default => 0 }
 
   unless $facts['kernel'] == 'Linux' {
     fail("network: unsupported kernel ${facts['kernel']}")
@@ -128,6 +129,9 @@ class network (
       command     => 'nmcli connection reload',
       path        => ['/usr/bin', '/usr/sbin', '/bin', '/sbin'],
       refreshonly => true,
+      # With NetworkManager stopped (e.g. service_ensure: stopped) there is nothing to reload;
+      # it reads the files when it starts.
+      onlyif      => 'systemctl is-active --quiet NetworkManager',
       require     => Class['network::service'],
     }
   }
@@ -137,6 +141,12 @@ class network (
       owner   => 'root',
       group   => 'root',
       mode    => '0600',   # netplan warns about (and newer releases refuse) world-readable files
+      # Check the new file together with the other netplan files in a scratch copy first,
+      # so a file netplan cannot parse never replaces the working one.
+      validate_cmd => $netplan_dir ? {
+        '/etc/netplan' => "/bin/sh -c 'd=\$(mktemp -d) && mkdir \$d/etc && cp -a /etc/netplan \$d/etc/netplan && cp % \$d/etc/netplan/${basename($netplan_file)} && netplan generate --root-dir \$d; rc=\$?; rm -rf \$d; exit \$rc'",
+        default        => undef,
+      },
       require => Class['network::config'],
       notify  => Exec['network: netplan generate'],
     }
@@ -165,8 +175,11 @@ class network (
   #   2. ALL connection files (so a bond never comes up before its port files exist)
   #   3. one `nmcli connection reload` (NetworkManager backends)
   #   4. activation of the connections whose files changed
-  Class['network::config'] -> Network::Connection <| |>
-  File <| tag == 'network::connection' |> -> Network::Activate <| |>
+  if $nm_managed {
+    File <| tag == 'network::connection' |> -> Exec['network: nmcli connection reload']
+  }
+  Class['network::config'] -> File <| tag == 'network::connection' |>
+  File <| tag == 'network::connection' |> -> Exec <| tag == 'network::activation' |>
 
   $route_tables.each |$name, $tid| {
     network::route_table { $name: id => $tid }

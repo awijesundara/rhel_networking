@@ -207,7 +207,7 @@ define network::render::ifcfg (
   $port_of = $p['port'].then |$port| { $port['type'] }
 
   if $legacy and $port_of == 'bond' {
-    File[$ifcfg_path] ~> Exec <| title == "network: activate ${p['port']['controller']}" |>
+    File[$ifcfg_path] ~> Exec <| tag == "network-device-${md5($p['port']['controller'])}" |>
   } else {
     $legacy_command = $port_of ? {
       'bridge' => "ifup '${p['file_name']}'",

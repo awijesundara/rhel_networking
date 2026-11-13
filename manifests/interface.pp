@@ -15,7 +15,7 @@ define network::interface (
   Array[Network::Route]                           $routes                 = [],
   Array[Network::Routing_rule]                    $routing_rules          = [],
   Hash                                            $ethtool                = {},
-  String                                          $ipv6_method            = 'auto',
+  Optional[Network::Ipv6Method]                   $ipv6_method            = undef,
   Boolean                                         $reapply                = false,
   Optional[String]                                $connection_id          = undef,
 ) {

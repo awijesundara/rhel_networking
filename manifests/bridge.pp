@@ -27,7 +27,7 @@ define network::bridge (
       ensure         => $ensure,
       type           => 'ethernet',
       interface_name => $port,
-      controller     => $title,
+      controller     => pick($connection['interface_name'], $title),
       port_type      => 'bridge',
       *              => $port_defaults + $override,
     }

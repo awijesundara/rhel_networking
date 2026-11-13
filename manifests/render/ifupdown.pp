@@ -15,8 +15,9 @@ define network::render::ifupdown (
 
   # --- device -------------------------------------------------------------
   $type_lines = $p['type'] ? {
-    # The bond lists no slaves itself; each port says `bond-master <bond>`.
-    'bond'   => ['bond-slaves none'] + $p['bond_options'].map |$k, $v| { "bond-${regsubst($k, '_', '-', 'G')} ${v}" },
+    # The bond lists its members (each also says `bond-master <bond>`). With `bond-slaves none`,
+    # `ifdown bond0; ifup bond0` leaves the bond without members (verified on Debian 12).
+    'bond'   => ["bond-slaves ${p['ports'].empty ? { true => 'none', default => $p['ports'].join(' ') }}"] + $p['bond_options'].map |$k, $v| { "bond-${regsubst($k, '_', '-', 'G')} ${v}" },
     'vlan'   => ["vlan-raw-device ${p['vlan_parent']}"],
     'bridge' => ["bridge_ports ${p['ports'].empty ? { true => 'none', default => $p['ports'].join(' ') }}"]
       + $p['bridge_options'].map |$k, $v| {
@@ -44,6 +45,15 @@ define network::render::ifupdown (
   } else {
     $v4 = $p['ipv4']
     $v6 = $p['ipv6']
+
+    if $p['ensure'] == 'present' {
+      if $v4['ignore_auto_routes'] or $v6['ignore_auto_routes'] {
+        fail("${p['source']}: ifupdown cannot express ipv4/ipv6_ignore_auto_routes; use a NetworkManager or netplan backend")
+      }
+      if ($v4['never_default'] and $v4['method'] == 'auto') or ($v6['never_default'] and $v6['method'] in ['auto', 'dhcp']) {
+        fail("${p['source']}: ifupdown cannot express ipv4/ipv6_never_default with automatic addressing; use static addressing or a NetworkManager backend")
+      }
+    }
 
     $inet_method = $v4['method'] ? { 'manual' => 'static', 'auto' => 'dhcp', default => 'manual' }
     $inet_lines  = [

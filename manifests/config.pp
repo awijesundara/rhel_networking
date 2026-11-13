@@ -103,12 +103,9 @@ class network::config {
   }
 
   unless $network::all_route_tables.empty {
-    file { ['/etc/iproute2', $network::rt_tables_dir]:
-      ensure => directory,
-      owner  => 'root',
-      group  => 'root',
-      mode   => '0755',
-    }
+    ensure_resource('file', ['/etc/iproute2', $network::rt_tables_dir], {
+      'ensure' => 'directory', 'owner' => 'root', 'group' => 'root', 'mode' => '0755',
+    })
   }
 
   unless $network::routing_tables.empty {

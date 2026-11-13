@@ -46,16 +46,16 @@ define network::connection (
   Optional[Integer[-999, 999]]                     $autoconnect_priority      = undef,
   Optional[Stdlib::MAC]                            $mac_address               = undef,
   Optional[Integer[68, 65535]]                     $mtu                       = undef,
-  Optional[String[1]]                              $zone                      = undef,
+  Optional[Pattern[/\A[A-Za-z0-9_-]+\z/]]          $zone                      = undef,
   # ports
   Optional[Network::Ifname]                        $controller                = undef,
   Optional[Enum['bond', 'bridge']]                 $port_type                 = undef,
   # type specific
-  Hash[Network::OptionKey, Scalar]                 $bond_options              = {},
+  Hash[Network::OptionKey, Network::OptionValue]   $bond_options              = {},
   Optional[Integer[0, 4094]]                       $vlan_id                   = undef,
   Optional[Network::Ifname]                        $vlan_parent               = undef,
-  Hash[Network::OptionKey, Scalar]                 $bridge_options            = {},
-  Hash[Network::OptionKey, Scalar]                 $bridge_port_options       = {},
+  Hash[Network::OptionKey, Network::OptionValue]   $bridge_options            = {},
+  Hash[Network::OptionKey, Network::OptionValue]   $bridge_port_options       = {},
   Optional[Enum['datagram', 'connected']]          $infiniband_transport_mode = undef,
   # IPv4
   Optional[Network::Ipv4Method]                    $ipv4_method               = undef,
@@ -80,17 +80,17 @@ define network::connection (
   Optional[Enum['eui64', 'stable-privacy', 'default', 'default-or-eui64']] $ipv6_addr_gen_mode        = undef,
   # common L3
   Array[Stdlib::IP::Address::Nosubnet]             $dns                       = [],
-  Array[String[1]]                                 $dns_search                = [],
+  Array[Pattern[/\A[A-Za-z0-9_.-]+\z/]]           $dns_search                = [],
   Array[Network::Route]                            $routes                    = [],
   Array[Network::Rule]                             $rules                     = [],
   # ethtool (keyfile [ethtool] keys, e.g. { 'ring-rx' => 4096, 'feature-tso' => false }); ifcfg uses ethtool_opts
-  Hash[Network::OptionKey, Scalar]                 $ethtool                   = {},
-  Optional[String[1]]                              $ethtool_opts              = undef,
+  Hash[Network::OptionKey, Network::OptionValue]   $ethtool                   = {},
+  Optional[Pattern[/\A[A-Za-z0-9 _.:;,\/+-]+\z/]]  $ethtool_opts              = undef,
   Array[Network::Ifname]                           $ports                     = [],
   # escape hatches
   Array[String[1]]                                 $ifupdown_settings         = [],
-  Hash[String[1], Hash[String[1], Any]]            $keyfile_settings          = {},
-  Hash[String[1], Any]                             $ifcfg_settings            = {},
+  Hash[Pattern[/\A[A-Za-z0-9_.-]+\z/], Hash[Pattern[/\A[A-Za-z0-9_.-]+\z/], Any]] $keyfile_settings = {},
+  Hash[Pattern[/\A[A-Za-z_][A-Za-z0-9_]*\z/], Any] $ifcfg_settings            = {},
   Hash[String[1], Any]                             $netplan_settings          = {},
   Optional[Network::Activation]                    $activation                = undef,
 ) {
@@ -109,6 +109,9 @@ define network::connection (
   # ---------------------------------------------------------------------------
   # 1. Validation
   # ---------------------------------------------------------------------------
+  if $title =~ /[\r\n]/ {
+    fail('network::connection: the resource title must not contain line breaks')
+  }
   $where = "network::connection[${title}]"
   if $is_port and $port_type =~ Undef {
     fail("${where}: port_type (bond or bridge) is required when controller is set")
@@ -132,6 +135,11 @@ define network::connection (
   }
   if $ipv6_addr_gen_mode =~ Pattern[/\Adefault/] and $backend != 'keyfile' {
     fail("${where}: ipv6_addr_gen_mode '${ipv6_addr_gen_mode}' is only supported by the keyfile backend (NetworkManager >= 1.40)")
+  }
+  # NetworkManager rejects a profile with an unknown [ethtool] key, so catch typos here.
+  $bad_ethtool = $ethtool.keys.filter |$k| { $k !~ /\A(feature|ring|coalesce|pause|channels|eee)-[a-z0-9-]+\z/ }
+  unless $bad_ethtool.empty {
+    fail("${where}: unknown ethtool setting(s) ${bad_ethtool.join(', ')}; keys start with feature-, ring-, coalesce-, pause-, channels- or eee-")
   }
   if !$ethtool.empty and !($backend in ['keyfile', 'netplan']) {
     warning("${where}: 'ethtool' is only rendered by the keyfile backend; use 'ethtool_opts' on ${backend}")
@@ -261,7 +269,7 @@ define network::connection (
         'dns_search'         => $dns_search,
         'routes'             => $v4_routes,
         'rules'              => $rules.filter |$r| { network::rule_family($r) == 'ipv4' },
-        'route_metric'       => $ipv4_route_metric,
+        'route_metric'       => ($ipv4_route_metric == -1) ? { true => undef, default => $ipv4_route_metric },
         'route_table'        => $ipv4_route_table.then |$t| { network::table_id($t) },
         'never_default'      => $ipv4_never_default,
         'may_fail'           => $ipv4_may_fail,
@@ -278,7 +286,7 @@ define network::connection (
         'dns'                => $v6_dns,
         'routes'             => $v6_routes,
         'rules'              => $rules.filter |$r| { network::rule_family($r) == 'ipv6' },
-        'route_metric'       => $ipv6_route_metric,
+        'route_metric'       => ($ipv6_route_metric == -1) ? { true => undef, default => $ipv6_route_metric },
         'route_table'        => $ipv6_route_table.then |$t| { network::table_id($t) },
         'never_default'      => $ipv6_never_default,
         'may_fail'           => $ipv6_may_fail,
@@ -299,7 +307,7 @@ define network::connection (
   # A VLAN sits on its parent: bring it up after the parent, and again whenever the parent is
   # restarted (restarting a parent removes the VLANs on top of it on the legacy service).
   if $type == 'vlan' {
-    Exec <| title == "network: activate ${vlan_parent}" |> ~> Exec <| title == "network: activate ${id}" |>
+    Exec <| tag == "network-device-${md5($vlan_parent)}" |> ~> Exec <| title == "network: activate ${id}" |>
   }
 
   # ---------------------------------------------------------------------------

@@ -2,10 +2,13 @@
 define network::route_table (
   Integer[1, 4294967295]    $id,
   Enum['present', 'absent'] $ensure = 'present',
-  String[1]                 $table_name = $title,
+  Pattern[/\A[A-Za-z_][\w.-]*\z/] $table_name = $title,
 ) {
   include network
 
+  ensure_resource('file', ['/etc/iproute2', $network::rt_tables_dir], {
+    'ensure' => 'directory', 'owner' => 'root', 'group' => 'root', 'mode' => '0755',
+  })
   file { "${network::rt_tables_dir}/${table_name}.conf":
     ensure  => $ensure ? { 'present' => file, default => absent },
     owner   => 'root',

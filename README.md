@@ -100,7 +100,8 @@ More in [examples/](examples/).
 ## How changes are applied
 
 - A Puppet run writes the files and reloads them. **Live links are not touched**: new
-  settings take effect when the interface is next activated or the host reboots.
+  settings take effect when the interface is next activated, NetworkManager restarts
+  (e.g. after a package update) or the host reboots.
 - To apply a change immediately, set `reapply: true` on the interface. This drops its link
   briefly, so use it in a maintenance window. For `network::connections` and `bridges`, the
   same is set with `activation: up` (per connection or for the whole class).
@@ -125,7 +126,7 @@ More in [examples/](examples/).
 | `routes` | `[]` | See *Routes* |
 | `routing_rules` | `[]` | See *Routing rules* |
 | `ethtool` | `{}` | e.g. `{ feature-gro: false, ring-rx: 4096 }` |
-| `ipv6_method` | `auto` | `auto`, `dhcp`, `manual`, `disabled`, `ignore` |
+| `ipv6_method` | `ipv6_default_method` | `auto`, `dhcp`, `manual`, `disabled`, `ignore` |
 | `connection_id` | interface name | Connection and file name |
 | `autoconnect` | `true` | Bring up at boot |
 | `reapply` | `false` | Apply changes immediately (see above) |
@@ -162,6 +163,7 @@ and default to `ipv4_method: manual`.
 | `backend` | from the OS | `keyfile`, `ifcfg`, `network_scripts`, `netplan`, `ifupdown`, `wicked` |
 | `routing_tables` | `{}` | Table number to name; replaces `/etc/iproute2/rt_tables` |
 | `sysctl` | `{}` | Written to `/etc/sysctl.d/90-network.conf` |
+| `ipv6_default_method` | `auto` | IPv6 method of every interface that sets none, e.g. `disabled` |
 | `activation` | `none` | For `connections` and `bridges`: `none`, `up` or `reapply` |
 | `manage_service` | `true` | Manage NetworkManager, systemd-networkd or wicked |
 | `manage_packages` | `true` | Install the backend's packages |
@@ -172,14 +174,29 @@ and default to `ipv4_method: manual`.
 
 - **RHEL:** `ethtool` ring, coalesce and offload settings take effect when the connection
   activates (`reapply: true` or a reboot).
+- **RHEL, adopting a host:** if an interface already has a NetworkManager profile under
+  another name (for example from the installer), NetworkManager keeps using that one, also
+  after a reboot, until Puppet's profile has been activated once. Adopt such a host in a
+  maintenance window with `reapply: true`, then delete the old profile
+  (`nmcli connection delete <name>`).
 - **RHEL 7:** NetworkManager 1.18 cannot store `/0` routes; they are written as two `/1`
   routes. `ipv6_method: disabled` becomes `ignore`.
 - **Ubuntu:** all interfaces share `/etc/netplan/90-network.yaml`, and `netplan apply`
   applies all of them at once. Files from cloud-init (`50-cloud-init.yaml`) still apply;
-  remove them when Puppet should own the network. netplan cannot express everything, so
+  remove them when Puppet should own the network. A new file is checked with
+  `netplan generate` before it replaces the old one. netplan cannot express everything, so
   these fail the run: rules without `from`/`to` or `table`, rules with `iif`/`oif`,
-  `ipv4_never_default` with DHCP. Of `ethtool`, only offload settings are supported.
-- **Bonds:** removing a member from `slaves` leaves its file in place; remove it with
+  `ipv4_never_default` with DHCP. With the `networkd` renderer and both DHCP families
+  enabled, IPv4 and IPv6 route metrics, `ignore_auto_dns` and `ignore_auto_routes`
+  must match; mismatches fail compilation. Of `ethtool`, only offload settings are supported.
+- **Debian / ifupdown:** automatic addressing cannot enforce `ipv4_never_default`
+  or `ipv6_never_default`, and `ipv4_ignore_auto_routes` / `ipv6_ignore_auto_routes`
+  are unsupported. These settings fail compilation rather than allowing unwanted routes.
+- **SUSE / wicked:** `ignore_auto_routes`, `ignore_auto_dns`, and `ipv6_never_default`
+  with automatic IPv6 fail compilation. DNS comes from `/etc/sysconfig/network/config`.
+- **Bonds:** port profiles use a custom controller `interface_name` when supplied.
+  With flat `reapply: true`, changes to managed port profiles reactivate the bond.
+  Removing a member from `slaves` leaves its file in place; remove it with
   `network::bond_slave { 'bond0-eth2': ensure => absent }`.
 
 ## Checking a server

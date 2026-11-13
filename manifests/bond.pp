@@ -33,7 +33,7 @@ define network::bond (
   Boolean                                         $autoconnect            = true,
   Array[Network::Route]                           $routes                 = [],
   Array[Network::Routing_rule]                    $routing_rules          = [],
-  String                                          $ipv6_method            = 'auto',
+  Optional[Network::Ipv6Method]                   $ipv6_method            = undef,
   Boolean                                         $reapply                = false,
   Optional[String]                                $connection_id          = undef,
 ) {
@@ -83,6 +83,13 @@ define network::bond (
         ensure         => $ensure,
         autoconnect    => $autoconnect,
       }
+      if $ensure == 'present' and $reapply {
+        if $network::backend == 'netplan' {
+          Network::Connection["${title}-${slave}"] ~> Exec['network: netplan apply']
+        } else {
+          Network::Connection["${title}-${slave}"] ~> Exec <| title == "network: activate ${id}" |>
+        }
+      }
     }
   } elsif $ports =~ NotUndef {
     network::connection { $title:
@@ -99,7 +106,7 @@ define network::bond (
         ensure         => $ensure,
         type           => 'ethernet',
         interface_name => $port,
-        controller     => $title,
+        controller     => pick($connection['interface_name'], $title),
         port_type      => 'bond',
         ethtool        => $ethtool,
         *              => $port_defaults + $override,

@@ -197,6 +197,9 @@ define network::render::netplan (
       'use-routes'   => $v6['ignore_auto_routes'] ? { true => false, default => undef },
       'route-metric' => $v6['route_metric'],
     }.filter |$k, $v| { $v =~ NotUndef }
+    if $p['ensure'] == 'present' and $network::netplan_renderer == 'networkd' and $dhcp4 and $dhcp6 and $overrides4 != $overrides6 {
+      fail("${where}: networkd requires identical IPv4 and IPv6 DHCP overrides; set matching ipv4/ipv6_route_metric, ignore_auto_dns and ignore_auto_routes, or disable one DHCP family")
+    }
     $dns = $v4['dns'] + $v6['dns']
 
     $l3_keys = {

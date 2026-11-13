@@ -53,8 +53,21 @@ define network::render::wicked (
       $v6['method'] ? { 'auto' => 'dhcp6+auto6', 'dhcp' => 'dhcp6', default => undef },
     ].filter |$protocol| { $protocol =~ NotUndef }
     $bootproto = $protocols.empty ? { true => 'static', default => $protocols.join('+') }
+    if $p['ensure'] == 'present' {
+      if $v4['ignore_auto_routes'] or $v6['ignore_auto_routes'] or $v4['ignore_auto_dns'] or $v6['ignore_auto_dns'] {
+        fail("${p['source']}: wicked cannot express ipv4/ipv6_ignore_auto_routes or ignore_auto_dns; use a NetworkManager backend")
+      }
+      if $v6['never_default'] and $v6['method'] in ['auto', 'dhcp'] {
+        fail("${p['source']}: wicked cannot express ipv6_never_default with automatic IPv6; use static addressing or a NetworkManager backend")
+      }
+    }
+    $dhcp4 = $v4['method'] == 'auto'
     $ipv6_settings = {
-      'DHCLIENT6_MODE' => $v6['method'] ? { 'auto' => 'auto', 'dhcp' => 'managed', default => undef },
+      'DHCLIENT6_MODE'             => $v6['method'] ? { 'auto' => 'auto', 'dhcp' => 'managed', default => undef },
+      # Verified with `wicked show-config`: removes default-route from the DHCP update list,
+      # and sets the priority (metric) of DHCP routes.
+      'DHCLIENT_SET_DEFAULT_ROUTE' => ($dhcp4 and $v4['never_default']) ? { true => false, default => undef },
+      'DHCLIENT_ROUTE_PRIORITY'    => $dhcp4 ? { true => $v4['route_metric'], default => undef },
     }
     # Wicked reads system sysctl files while building its configuration and applies
     # these values on ifreload, including for virtual interfaces not created yet.
@@ -72,11 +85,14 @@ define network::render::wicked (
     }
 
     # ifroute: "DESTINATION GATEWAY NETMASK DEVICE [OPTIONS]", '-' = not set.
-    $default_routes = [
-      ($v4['gateway'] =~ NotUndef and !$v4['never_default']) ? { true => "default ${v4['gateway']} - ${dev}", default => undef },
-      ($v6['gateway'] =~ NotUndef and !$v6['never_default']) ? { true => "default ${v6['gateway']} - ${dev}", default => undef },
-    ].filter |$l| { $l =~ NotUndef }
-    $all_routes = $v4['routes'] + $v6['routes']
+    # As in NetworkManager, the connection's route metric applies to every route without its own.
+    $default_routes = [[$v4, '0.0.0.0/0'], [$v6, '::/0']].filter |$f| { $f[0]['gateway'] =~ NotUndef and !$f[0]['never_default'] }
+      .map |$f| {
+        regsubst(network::wicked_route({ 'destination' => $f[1], 'gateway' => $f[0]['gateway'], 'metric' => $f[0]['route_metric'] }
+          .filter |$k, $v| { $v =~ NotUndef }, $dev), '\\A\\S+', 'default')
+      }
+    $all_routes = $v4['routes'].map |$r| { ($r['metric'] =~ Undef and $v4['route_metric'] =~ NotUndef) ? { true => $r + { 'metric' => $v4['route_metric'] }, default => $r } }
+      + $v6['routes'].map |$r| { ($r['metric'] =~ Undef and $v6['route_metric'] =~ NotUndef) ? { true => $r + { 'metric' => $v6['route_metric'] }, default => $r } }
     $routes = $default_routes + network::annotated($all_routes, $all_routes.map |$r| { network::wicked_route($r, $dev) })
     # ifrule: "ipv4|ipv6 <ip rule arguments>"
     $all_rules = $v4['rules'] + $v6['rules']
