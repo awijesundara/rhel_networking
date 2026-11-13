@@ -1,0 +1,5 @@
+<%- | String $header, Array[String] $lines | -%>
+<%= $header -%>
+<% $lines.each |$l| { if $l =~ /[\r\n]/ { fail("network: line breaks are not allowed in generated lines: ${l[0, 40]}...") } -%>
+<%= $l %>
+<% } -%>

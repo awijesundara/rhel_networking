@@ -1,0 +1,3 @@
+---
+network::backend: wicked
+network::ifcfg_dir: /etc/sysconfig/network

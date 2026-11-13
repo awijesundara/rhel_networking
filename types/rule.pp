@@ -1,0 +1,20 @@
+type Network::Rule = Struct[{
+  priority                        => Integer[0, 4294967295],
+  Optional[family]                => Enum['ipv4', 'ipv6'],
+  Optional['not']                   => Boolean,
+  Optional[from]                  => Stdlib::IP::Address,
+  Optional[to]                    => Stdlib::IP::Address,
+  Optional[iif]                   => Network::Ifname,
+  Optional[oif]                   => Network::Ifname,
+  Optional[fwmark]                => Variant[Integer[0], Pattern[/\A(0x)?[0-9a-fA-F]+(\/(0x)?[0-9a-fA-F]+)?\z/]],
+  Optional[tos]                   => Variant[Integer[0, 255], String[1]],
+  Optional[ipproto]               => Variant[Integer[0, 255], String[1]],
+  Optional[sport]                 => Variant[Integer[0, 65535], Pattern[/\A\d+-\d+\z/]],
+  Optional[dport]                 => Variant[Integer[0, 65535], Pattern[/\A\d+-\d+\z/]],
+  Optional[uidrange]              => Pattern[/\A\d+-\d+\z/],
+  Optional[suppress_prefixlength] => Integer[0, 128],
+  Optional[table]                 => Network::Table,
+  Optional[action]                => Enum['blackhole', 'unreachable', 'prohibit'],
+  # Free text; written as a comment next to the entry in the generated files.
+  Optional[description]           => Network::Description,
+}]

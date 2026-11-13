@@ -1,0 +1,28 @@
+---
+# Interfaces and a bond. Every key not shown keeps its default.
+network::routing_tables:
+  100: uplink
+
+network::interfaces:
+  eth0:
+    connection_id: management         # connection and file name (default: eth0)
+    ipv4_address: 192.0.2.2/24
+    ipv4_gateway: 192.0.2.1
+    ipv4_dns: [192.0.2.53]
+    ipv6_method: disabled
+
+network::bonds:
+  bond0:
+    slaves: [eth1, eth2]
+    ipv4_address: 203.0.113.2/24
+    bond_mode: active-backup
+    bond_primary: eth1
+    ipv6_method: disabled
+    routes:
+      - destination: 198.51.100.0/24
+        gateway: 203.0.113.1
+        table: uplink
+    routing_rules:
+      - priority: 100
+        from: 203.0.113.2/32
+        table: uplink

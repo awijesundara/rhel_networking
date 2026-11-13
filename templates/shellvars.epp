@@ -1,0 +1,5 @@
+<%- | String $header, Hash[String, Any] $settings | -%>
+<%= $header -%>
+<% $settings.filter |$k, $v| { $v =~ NotUndef }.each |$k, $v| { -%>
+<%= $k %>=<%= network::ifcfg_value($v) %>
+<% } -%>

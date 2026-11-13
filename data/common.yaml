@@ -1,0 +1,5 @@
+---
+# keyfile works on any distribution running NetworkManager
+network::backend: keyfile
+network::nm_legacy_port_keys: true
+network::nm_package: NetworkManager

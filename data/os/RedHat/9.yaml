@@ -1,0 +1,4 @@
+---
+# ifcfg deprecated; keyfile is the native format
+network::backend: keyfile
+network::nm_legacy_port_keys: true

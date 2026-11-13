@@ -1,0 +1,4 @@
+---
+# Ubuntu (18.04 and later) configures networking with netplan; ifupdown is not installed.
+network::backend: netplan
+network::nm_package: network-manager

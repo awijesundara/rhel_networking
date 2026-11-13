@@ -1,0 +1,12 @@
+<%- | String $header, Hash[String, Hash] $sections | -%>
+<%= $header -%>
+<% $sections.each |$section, $settings| {
+     $real = $settings.filter |$k, $v| { $v =~ NotUndef }
+     unless $real.empty { -%>
+
+[<%= $section %>]
+<%     $real.each |$k, $v| { -%>
+<%= $k %>=<%= network::keyfile_value($v) %>
+<%     } -%>
+<%   } -%>
+<% } -%>

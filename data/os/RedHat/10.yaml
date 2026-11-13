@@ -1,0 +1,4 @@
+---
+# ifcfg-rh plugin removed; keyfile only. NM >= 1.46 uses controller/port-type
+network::backend: keyfile
+network::nm_legacy_port_keys: false

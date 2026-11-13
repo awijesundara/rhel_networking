@@ -1,0 +1,4 @@
+---
+# NM reads ifcfg-rh natively; network-scripts still available
+network::backend: ifcfg
+network::nm_legacy_port_keys: true

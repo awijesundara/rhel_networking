@@ -1,0 +1,6 @@
+.DS_Store
+/pkg/
+/spec/fixtures/
+# Test suites stay local; only the module is published.
+/tests/
+.smbdelete*

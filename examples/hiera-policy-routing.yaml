@@ -1,0 +1,43 @@
+---
+# An LACP bond for the main network and a VLAN to a second ISP; traffic from the
+# ISP2 address leaves via ISP2. Uses the full connection API (bond ports, VLAN,
+# named routing tables). Works unchanged on every supported OS.
+
+# Name the routing tables we use, so routes and rules can say `table: isp2`.
+network::route_tables:
+  isp2: 200
+
+# Asymmetric routing needs loose reverse-path filtering.
+network::sysctl:
+  net.ipv4.conf.all.rp_filter: 2
+
+network::bonds:
+  bond0:
+    ports: [ens1f0, ens1f1]                 # physical NICs to aggregate
+    bond_options:                           # kernel bonding options, passed as-is
+      mode: 802.3ad
+      miimon: 100
+      xmit_hash_policy: layer3+4
+    connection:                             # settings for bond0 itself
+      mtu: 9000
+      ipv4_addresses: [10.0.0.10/24]
+      ipv4_gateway: 10.0.0.1                # the main default route
+      dns: [10.0.0.53]
+
+network::connections:
+  bond0.200:
+    type: vlan
+    vlan_id: 200
+    vlan_parent: bond0
+    ipv4_addresses: [192.0.2.10/24]
+    ipv4_never_default: true                # do NOT add a second main default route
+    routes:
+      - destination: 0.0.0.0/0
+        gateway: 192.0.2.1
+        table: isp2
+        description: default route for traffic sourced from the ISP2 address
+    rules:
+      - priority: 100
+        from: 192.0.2.10/32
+        table: isp2
+        description: replies from 192.0.2.10 leave via ISP2
