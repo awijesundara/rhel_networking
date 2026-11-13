@@ -83,7 +83,7 @@ define network::connection (
   Array[Pattern[/\A[A-Za-z0-9_.-]+\z/]]           $dns_search                = [],
   Array[Network::Route]                            $routes                    = [],
   Array[Network::Rule]                             $rules                     = [],
-  # ethtool (keyfile [ethtool] keys, e.g. { 'ring-rx' => 4096, 'feature-tso' => false }); ifcfg uses ethtool_opts
+  # ethtool (keyfile [ethtool] keys, e.g. { 'ring-rx' => 4096, 'feature-tso' => false }); translated to ETHTOOL_OPTS on ifcfg
   Hash[Network::OptionKey, Network::OptionValue]   $ethtool                   = {},
   Optional[Pattern[/\A[A-Za-z0-9 _.:;,\/+-]+\z/]]  $ethtool_opts              = undef,
   Array[Network::Ifname]                           $ports                     = [],
@@ -141,8 +141,8 @@ define network::connection (
   unless $bad_ethtool.empty {
     fail("${where}: unknown ethtool setting(s) ${bad_ethtool.join(', ')}; keys start with feature-, ring-, coalesce-, pause-, channels- or eee-")
   }
-  if !$ethtool.empty and !($backend in ['keyfile', 'netplan']) {
-    warning("${where}: 'ethtool' is only rendered by the keyfile backend; use 'ethtool_opts' on ${backend}")
+  if !$ethtool.empty and !($backend in ['keyfile', 'netplan', 'ifcfg', 'network_scripts']) {
+    warning("${where}: 'ethtool' is not rendered by ${backend}; use 'ethtool_opts'")
   }
 
   # ---------------------------------------------------------------------------

@@ -1,6 +1,6 @@
 {
   "name": "anushka-network",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "author": "Anushka Wijesundara",
   "summary": "Linux network configuration for RHEL 7-10, Ubuntu, Debian and SUSE (NetworkManager, netplan, network-scripts, ifupdown, wicked): bonds, bridges, VLANs, policy routing",
   "license": "Apache-2.0",

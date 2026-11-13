@@ -56,7 +56,8 @@ define network::render::ifcfg (
     'MACADDR'              => $physical ? { true => undef, default => $p['mac_address'] },
     'MTU'                  => $p['mtu'],
     'ZONE'                 => $p['zone'],
-    'ETHTOOL_OPTS'         => $p['ethtool_opts'],
+    # ethtool_opts wins; otherwise the keyfile-style ethtool settings are translated.
+    'ETHTOOL_OPTS'         => $p['ethtool_opts'].lest || { $p['device'].then |$d| { network::ethtool_opts($d, $p['ethtool'], $nm) } },
   }
 
   $type_keys = $p['type'] ? {

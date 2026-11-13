@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.0.2
+
+- `ethtool` settings now also apply on RHEL 7/8's default `ifcfg` backend and on the legacy
+  network service: they are translated into `ETHTOOL_OPTS`. Before, they were dropped with a
+  warning. NetworkManager 1.18 (RHEL 7) applies only the offload (`feature-*`) settings.
+- README: shorter, with examples for active-backup bonds, Solarflare tuning and PTP.
+
 ## 1.0.1
 
 - NetworkManager reload and activation only run while NetworkManager is active.
